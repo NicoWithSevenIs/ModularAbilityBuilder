@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Newtonsoft.Json;
 using System.Threading.Tasks;
-
+using Redcode.Awaiting;
 
 public class SpriteRetriever : Singleton<SpriteRetriever>
 {
@@ -40,7 +40,7 @@ public class SpriteRetriever : Singleton<SpriteRetriever>
        
         UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
 
-        //await request.SendWebRequest();
+        await request.SendWebRequest();
 
         var response = (DownloadHandlerTexture)request.downloadHandler;
         if (string.IsNullOrEmpty(response.error))
