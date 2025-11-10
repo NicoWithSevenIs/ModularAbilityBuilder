@@ -1,20 +1,11 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
 
-
-public struct PokemonData
-{
-    public uint id;
-    public string name;
-}
 
 public class PokemonJSONParser : MonoBehaviour
 {
@@ -44,11 +35,12 @@ public class PokemonJSONParser : MonoBehaviour
         l = new(text.Split(tokens));
 
         bool writing = false;
-        var pkm = new PokemonData();
+        PokemonData pkm = new();
 
         foreach (var split in l) {
             string s = split.Replace("\t", "");
-            ConfigureLock(s, ref writing);
+
+            ConfigureLock(s, ref writing, ref pkm);
 
             if (!writing)
                 continue;
@@ -57,20 +49,28 @@ public class PokemonJSONParser : MonoBehaviour
             SplitKV(s, out key, out value);
             ParseKV(ref pkm, key, value);
         }
+        
     }
 
-    #region helper
-    private void ConfigureLock(string s, ref bool writing)
+    #region helpers
+    private void ConfigureLock(string s, ref bool writing, ref PokemonData pkm)
     {
         if (!writing)
         {
             var start_Case = Regex.Match(s, ": {");
             if (start_Case.Success)
+            {
                 writing = true;
+                pkm = new PokemonData();
+            }
         }
 
         if (writing && s == "},")
+        {
             writing = false;
+            PokemonDataManager.Instance.TryPushData(pkm);
+        }
+            
     }
 
     private void SplitKV(string s, out string key, out string value)
@@ -81,16 +81,77 @@ public class PokemonJSONParser : MonoBehaviour
     }
 
 
+   
     public void ParseKV(ref PokemonData pkm, string key, string value)
     {
+       
+        if (value[value.Length-1] == ',')
+            value = value.Substring(0, value.Length - 1);
+
+        if (value[0] == ' ')
+            value = value.Substring(1, value.Length - 1);
+
+
         switch (key)
         {
             case "num": pkm.id = uint.Parse(value); break;
-            case "name": pkm.name = value; break;
+            case "name": pkm.name = ParseString(value); break;
+            case "types": pkm.types = ParseStringList(value).ToArray(); break;
+            case "baseStats": pkm.baseStats = ParseStats(value); break;
+            case "evos": pkm.evolutions = ParseStringList(value).ToArray(); break;
         }
     }
 
-    #endregion
+    private string ParseString(string s) => s.Substring(1, s.Length - 2);
+
+    private List<string> ParseStringList(string s)
+    {
+        List<string> l_str = new();
+
+        if (s[0] != '[' || s[s.Length - 1] != ']')
+            throw new System.Exception($"{s} is not a string list.");
+
+        s = s.Substring(1, s.Length - 2);
+
+        char[] tokens = { ',' };
+        l_str = new(s.Split(tokens));
+     
+        for(int i =0; i < l_str.Count; i++)
+        {
+            if (l_str[i][0] == ' ')
+                l_str[i] = l_str[i].Substring(1);
+            l_str[i] = l_str[i].Substring(1, l_str[i].Length - 2);
+        }
+            
+        return l_str;
+    }
+
+    //ermm
+    private Stat ParseStats(string s)
+    {
+        if (s[0] != '{' || s[s.Length - 1] != '}')
+            throw new System.Exception($"{s} is not a string list.");
+
+        s = s.Substring(1, s.Length - 2);
+
+        char[] tokens = { ',' };
+        char[] p_token = { ':' };
+
+        List<string> l_str = new(s.Split(tokens));
+        List<uint> s_list = new();
+        
+        for(int i =0; i < l_str.Count; i++)
+        {
+            if (l_str[i][0] == ' ')
+                l_str[i] = l_str[i].Substring(1);
+            string[] partitions = l_str[i].Split(p_token);
+            s_list.Add(uint.Parse(partitions[1]));
+        }
+
+        return new Stat(s_list.ToArray());
+    }
+
+    #endregion helpers
 }
 
 #if UNITY_EDITOR
@@ -107,7 +168,7 @@ public class TextDownloaderEditor : Editor
             script.download_lock = true;
         }
 
-        if (GUILayout.Button("Read"))
+        if (Application.isPlaying && GUILayout.Button("Read"))
         {
             script.ReadAllText();
         }

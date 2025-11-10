@@ -11,7 +11,7 @@ public abstract class M_Singleton<T> : MonoBehaviour where T: Component
 {
     protected static T instance = null;
 
-    protected static T Instance
+    public static T Instance
     {
         get
         {
